@@ -38,11 +38,26 @@ def load_data(path=None):
     """
     # Helpful explicit error rather than returning None
     # Students should implement the loading logic described above.
-    raise NotImplementedError(
-        "load_data() is not implemented. Please load 'student-mat-mini.csv' (repo root) "
-        "or 'datasets/student-mat-mini.csv' and return a pandas DataFrame. "
-        "See scripts/generate_mini_dataset.py for generating the mini CSV."
-    )
+
+    if path is not None:
+        return pd.read_csv(path, sep=None, engine='python')
+
+    possible_paths = [
+    "student-mat-mini.csv",
+    "datasets/student-mat-mini.csv",
+    "datasets/student-mat.csv",
+    "student-mat.csv"
+    ]
+
+    for pp in possible_paths:
+        if os.path.exists(pp):
+            return pd.read_csv(pp, sep=None, engine='python')
+
+    # raise NotImplementedError(
+    #     "load_data() is not implemented. Please load 'student-mat-mini.csv' (repo root) "
+    #     "or 'datasets/student-mat-mini.csv' and return a pandas DataFrame. "
+    #     "See scripts/generate_mini_dataset.py for generating the mini CSV."
+    # )
 
 
 # -------------------------
@@ -55,7 +70,14 @@ def summary_stats():
 
     TODO: implement using load_data().
     """
-    raise NotImplementedError("summary_stats() not implemented. Compute mean_G3 and median_absences.")
+
+    df = load_data()
+    return {
+        "mean_G3": df["G3"].mean(),
+        "median_absences": df["absences"].median()
+    }
+
+    # raise NotImplementedError("summary_stats() not implemented. Compute mean_G3 and median_absences.")
 
 
 def compute_correlations():
@@ -64,7 +86,11 @@ def compute_correlations():
 
     TODO: implement using load_data().
     """
-    raise NotImplementedError("compute_correlations() not implemented. Return df.corr(numeric_only=True).")
+
+    df = load_data()
+    return df.corr(numeric_only=True)
+
+    # raise NotImplementedError("compute_correlations() not implemented. Return df.corr(numeric_only=True).")
 
 
 def preprocess_data(df):
@@ -81,7 +107,30 @@ def preprocess_data(df):
 
     NOTE: Tests assert target is exactly (G3 < 10) and will fail if you change it.
     """
-    raise NotImplementedError("preprocess_data(df) not implemented. See docstring for expected contract.")
+    # References:
+    # https://scikit-learn.org/stable/modules/preprocessing.html
+    # https://scikit-learn.org/stable/api/sklearn.preprocessing.html
+
+    from sklearn.preprocessing import MinMaxScaler
+
+    df = df.copy()
+    at_risk = (df['G3'] < 10).astype(int)
+    df["at_risk"] = at_risk
+
+    for drop_col in ['G1', 'G2', 'G3']:
+        if drop_col in df.columns:
+            df = df.drop(columns=drop_col)
+
+    df = pd.get_dummies(df)
+    df = df.fillna(0)
+
+    scaler = MinMaxScaler()
+    df_scaled = scaler.fit_transform(df)
+    df = pd.DataFrame(df_scaled, columns=df.columns)
+
+    return df
+
+    # raise NotImplementedError("preprocess_data(df) not implemented. See docstring for expected contract.")
 
 
 # -------------------------
@@ -104,12 +153,25 @@ def train_gb_pipeline(X_train=None, y_train=None):
         raise NotImplementedError("sklearn not available in the environment; install dependencies.")
 
     # Intentionally bare-bones pipeline (not fitted) so students must build preprocessor + fit
-    model = Pipeline([("classifier", GradientBoostingClassifier())])
+    # model = Pipeline([("classifier", GradientBoostingClassifier())])
     # The correct implementation should construct and include a named "preprocessor"
     # and call model.fit(X_train, y_train) before returning.
-    raise NotImplementedError(
-        "train_gb_pipeline() not implemented. Build a pipeline with a 'preprocessor' step and fit it."
-    )
+
+    # References:
+    # https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html
+
+    from sklearn.compose import ColumnTransformer
+
+    model = Pipeline([
+        ("preprocessor", ColumnTransformer(transformers=[], remainder='passthrough')),
+        ("classifier", GradientBoostingClassifier())])
+
+    model.fit(X_train, y_train)
+    return model
+
+    # raise NotImplementedError(
+    #     "train_gb_pipeline() not implemented. Build a pipeline with a 'preprocessor' step and fit it."
+    # )
 
 
 # -------------------------
@@ -126,11 +188,88 @@ class DecisionTree:
 
     def fit(self, X, y):
         """Student: implement recursive split building and store in self.tree"""
-        raise NotImplementedError("DecisionTree.fit not implemented (student task)")
+
+        X, y = np.array(X), np.array(y)
+        # Gini
+        def compute_gini(y):
+            labels = {}
+            for label in y:
+                labels[label] = labels.get(label,0) + 1
+            total = len(y)
+            gini = 1
+            for count in labels.values():
+                p = count / total
+                gini -= p ** 2
+            return gini
+        
+        # Fit the tree
+        def fit_tree(X, y, depth=0):
+            if len(set(y)) == 1:
+                return (y[0],)
+            
+            # Fixed[2026.04.14]: Handle max_depth reached
+            if (self.max_depth is not None) and (depth >= self.max_depth):
+                majority_label = max(set(y), key=list(y).count)
+                return (majority_label,)
+            
+            best_gini = float('inf')
+            best_feature, best_thresh = None, None
+
+            # Find best feature and threshold to spilt
+            for feature in range(X.shape[1]):
+                for thresh in set(X[:, feature]):
+                    left_labels = y[X[:, feature] <= thresh]
+                    right_labels = y[X[:, feature] > thresh]
+                    if len(left_labels) == 0 or len(right_labels) == 0:
+                        continue
+                    current_gini = compute_gini(left_labels) + compute_gini(right_labels)
+                    if current_gini < best_gini:
+                        best_gini = current_gini
+                        best_feature = feature
+                        best_thresh = thresh
+
+            # Fixed[2026.04.14]: Handle best_feature is None
+            if best_feature is None:
+                majority_label = max(set(y), key=list(y).count)
+                return (majority_label,)
+
+            feature_values = X[:, best_feature]
+            left_flags = feature_values <= best_thresh
+            right_flags = feature_values > best_thresh
+
+            left_X = X[left_flags]
+            right_X = X[right_flags]
+            left_labels = y[left_flags]
+            right_labels = y[right_flags]
+
+            return (best_feature, best_thresh, fit_tree(left_X,  left_labels,  depth + 1), fit_tree(right_X, right_labels, depth + 1))
+
+        self.tree = fit_tree(X, y)
+            
+        # raise NotImplementedError("DecisionTree.fit not implemented (student task)")
 
     def predict(self, X):
         """Student: implement prediction traversal using self.tree"""
-        raise NotImplementedError("DecisionTree.predict not implemented (student task)")
+        X = np.array(X)
+
+        def predict_sample(tree, sample):
+            # Leaf
+            if len(tree) == 1:
+                return tree[0]
+
+            feature, thresh, left_tree, right_tree = tree
+            if sample[feature] <= thresh:
+                return predict_sample(left_tree, sample)
+            else:
+                return predict_sample(right_tree, sample)
+        
+        results = []
+        for sample in X:
+            results.append(predict_sample(self.tree, sample))
+
+        return results
+
+        # raise NotImplementedError("DecisionTree.predict not implemented (student task)")
 
 
 class RandomForest:
@@ -149,8 +288,32 @@ class RandomForest:
 
     def fit(self, X, y):
         """Student: implement bagging + DecisionTree training"""
-        raise NotImplementedError("RandomForest.fit not implemented (student task)")
+        X = np.array(X)
+        y = np.array(y)
+
+        self.trees = []
+        # Bootstrapping
+        for _ in range(self.n_estimators):
+            sample_idx = np.random.choice(X.shape[0], size=self.sample_size, replace=True)
+            tree = DecisionTree(max_depth=self.max_depth)
+            tree.fit(X[sample_idx], y[sample_idx])
+            self.trees.append(tree)
+
+        # raise NotImplementedError("RandomForest.fit not implemented (student task)")
 
     def predict(self, X):
         """Student: implement majority-vote across self.trees"""
-        raise NotImplementedError("RandomForest.predict not implemented (student task)")
+        X = np.array(X)
+
+        results = []
+        # Majority voting
+        for sample in X:
+            votes = []
+            for tree in self.trees:
+                votes.append(tree.predict([sample])[0])
+            majority_label = max(set(votes), key=votes.count)
+            results.append(majority_label)
+
+        return results
+
+        # raise NotImplementedError("RandomForest.predict not implemented (student task)")
