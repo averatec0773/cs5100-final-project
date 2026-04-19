@@ -291,13 +291,21 @@ class RandomForest:
         X = np.array(X)
         y = np.array(y)
 
+        # Fixed[2026.04.17]: Input partial data into Decision Tree
+        np.random.seed(self.random_state)
         self.trees = []
+        self.feature_choices = []
+        
+        n_features = int(np.sqrt(X.shape[1]))
+
         # Bootstrapping
         for _ in range(self.n_estimators):
+            feature_idx = np.random.choice(X.shape[1], size=n_features, replace=False)
             sample_idx = np.random.choice(X.shape[0], size=self.sample_size, replace=True)
             tree = DecisionTree(max_depth=self.max_depth)
-            tree.fit(X[sample_idx], y[sample_idx])
+            tree.fit(X[sample_idx][:, feature_idx], y[sample_idx])
             self.trees.append(tree)
+            self.feature_choices.append(feature_idx)
 
         # raise NotImplementedError("RandomForest.fit not implemented (student task)")
 
@@ -309,11 +317,24 @@ class RandomForest:
         # Majority voting
         for sample in X:
             votes = []
-            for tree in self.trees:
-                votes.append(tree.predict([sample])[0])
+            for tree, feature_idx in zip(self.trees, self.feature_choices):
+                votes.append(tree.predict([sample[feature_idx]])[0])
             majority_label = max(set(votes), key=votes.count)
             results.append(majority_label)
 
         return results
 
         # raise NotImplementedError("RandomForest.predict not implemented (student task)")
+
+    # Fixed[2026.04.17] Add predict_proba to compute AUC
+    def predict_proba(self, X):
+        X = np.array(X)
+
+        results = []
+        for sample in X:
+            votes = []
+            for tree, feature_idx in zip(self.trees, self.feature_choices):
+                votes.append(tree.predict([sample[feature_idx]])[0])
+            prob = sum(v == 1 for v in votes) / len(votes)
+            results.append(prob)
+        return np.array(results)
