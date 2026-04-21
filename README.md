@@ -28,10 +28,8 @@ pytest tests/test_phase1_public.py
 
 ### Phase 2
 
-Phase 2 extends Phase 1 with feature selection and a neural network (MLP).
+Phase 2 extends Phase 1 with Feature Selection and a Neural Network (MLP).
 
-- **Code**: `student_project/phase2.ipynb`
-- **Results** (plots): `student_project/phase2_results/`
-- **Report**: `FINAL REPORT.pdf`
-
-To run Phase 2, open and execute `phase2.ipynb` in Jupyter or VS Code.
+- **Phase2 Code**: `./student_project/phase2.ipynb`
+- **Results**: `./student_project/phase2_results/`
+- **Report**: `./FINAL REPORT.pdf`
