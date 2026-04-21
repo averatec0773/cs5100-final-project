@@ -23,3 +23,15 @@ pip install -r requirements.txt
 ```bash
 pytest tests/test_phase1_public.py
 ```
+
+---
+
+### Phase 2
+
+Phase 2 extends Phase 1 with feature selection and a neural network (MLP).
+
+- **Code**: `student_project/phase2.ipynb`
+- **Results** (plots): `student_project/phase2_results/`
+- **Report**: `FINAL REPORT.pdf`
+
+To run Phase 2, open and execute `phase2.ipynb` in Jupyter or VS Code.
